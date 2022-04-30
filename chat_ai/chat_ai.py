@@ -1,4 +1,4 @@
-from typing import OrderedDict, Sequence
+from typing import Sequence
 import numpy as np
 from nltk.stem import WordNetLemmatizer
 import nltk
