@@ -117,6 +117,7 @@ class Chatbot:
 
         return np.array(bow)
 
+
     def answer(self, chatMan : ChatMan, text : str, threshold = None, noAnswerClass = "noAnswer"):
         if threshold is None: threshold = self.__defauthThreshold
 
