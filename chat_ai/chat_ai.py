@@ -109,7 +109,7 @@ class Chatbot:
         tokens = nltk.word_tokenize(text)
         tokens = [self.__lemmatizer.lemmatize(w.lower()) for w in tokens]
         
-        bow = [0] * len(self.vocab)
+        bow = [0] * len(self.__vocab)
     
         for w in tokens:
             for idx, word in enumerate(self.__vocab):
