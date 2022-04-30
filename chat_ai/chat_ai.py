@@ -254,9 +254,9 @@ class ChatbotTrainer:
 
         model.fit(x=train_X, y=train_Y, epochs=epochs)
 
-        self.vocab = vocab
-        self.classes = classes
-        self.model = model
+        #self.vocab = vocab
+        #self.classes = classes
+        #self.model = model
 
         return Chatbot(jsonData, vocab, classes, self.__patternManagers,  model, threshold)
 
