@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Mapping, Sequence
 import numpy as np
 from nltk.stem import WordNetLemmatizer
 import nltk
@@ -151,10 +151,13 @@ class ChatbotTrainer:
 
     __defaultPatternMan = PatternMan()
 
-    def __init__(self):
+    def __init__(self, patternManagers : Mapping[str, PatternMan]=None):
         self.__lemmatizer = WordNetLemmatizer()
-        self.__patternManagers = dict()
-        self.__patternManagers["_default"] = ChatbotTrainer.__defaultPatternMan
+        if patternManagers is None:
+            self.__patternManagers = dict()
+            self.__patternManagers["_default"] = ChatbotTrainer.__defaultPatternMan
+        else:
+            self.__patternManagers = patternManagers
 
 
     def addPatternMan(self, name : str, pm : PatternMan):
@@ -206,13 +209,13 @@ class ChatbotTrainer:
                     if isinstance(newPattern, str):
                         tokens = pm.tokenize(newPattern)
                         vocab.extend(tokens)
-                        doc_X.append(pattern)
+                        doc_X.append(newPattern)
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
                             vocab.extend(tokens)
-                            doc_X.append(pattern)
+                            doc_X.append(p)
                             doc_Y.append(tag)
                 
             if tag not in classes:
