@@ -133,6 +133,7 @@ class ChatMan:
             p = rawAnswer.find(":", 2)
             command = rawAnswer[ 2 : p -1 ] if p > 0 else rawAnswer[ 2 : len(rawAnswer) -1 ]
 
+            params = None
             if p > 0 : params = rawAnswer[p+1:len(rawAnswer) -1]
 
             if command in self.__responseManagers:
