@@ -127,13 +127,13 @@ class ChatMan:
 
         rawAnswer = random.choice(responses)
 
+        register = True
         if rawAnswer is not None and rawAnswer.startswith("${") and rawAnswer.startswith("}"):
             p = rawAnswer.find(":", 2)
             command = rawAnswer[ 2 : p -1 ] if p > 0 else rawAnswer[ 2 : len(rawAnswer) -1 ]
 
             if p > 0 : params = rawAnswer[p+1:len(rawAnswer) -1]
-
-            register = True
+            
             if command in self.__responseManagers:
                 rm = self.__responseManagers[command]
                 newAnswer, register = rm.getAnswer(self.__memories, params)
