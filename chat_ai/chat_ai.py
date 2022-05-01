@@ -133,13 +133,13 @@ class ChatMan:
 
             if p > 0 : params = rawAnswer[p+1:len(rawAnswer) -1]
 
+            register = True
             if command in self.__responseManagers:
                 rm = self.__responseManagers[command]
                 newAnswer, register = rm.getAnswer(self.__memories, params)
 
                 asw = newAnswer
             else:
-                register = True
                 asw = rawAnswer
 
         if register:
