@@ -36,16 +36,53 @@ class PatternWithParams(PatternMan):
 
 class IntentMemoryCell:
 
-    def __init__(self, selectedClasses : Sequence[str], chosenAnswer : str, nextExpectIntents : Sequence[str] = None):
+    def __init__(self, selectedClasses : Sequence[str], chosenAnswer : str, nextExpectIntents : Sequence[str] = None, ocuurence = 1):
         self.selectedClasses = selectedClasses
         self.chosenAnswer = chosenAnswer
         self.nextExpectIntents = nextExpectIntents
+        self.ocuurence = ocuurence
 
+class ResponseMan:
+
+    def getAnswer(self, memories, params):
+        pass
+
+class RMRepeatLastAnswer(ResponseMan):
+
+    def __init__(self, name: str = "repeatLastAnswer"):
+        self.__name = name
+
+
+    def __get_name(self):
+        return self.__name
+
+    name = property(__get_name)
+
+    def getAnswer(self, memories, params):
+        intentMemory = memories['intent-history']
+        m = intentMemory[len(intentMemory)-1]
+
+        if m is None : return (None, False)
+
+        if m.selectedClasses[0] == self.__name:
+            m.ocuurence += 1
+            return (m.chosenAnswer, False)
+
+        return (m.chosenAnswer, True)
 class ChatMan:
 
-    def __init__(self, memorySize=5):
+    def __init__(self, memorySize=5, responseManagers : Mapping[str, ResponseMan] = None):
         self.__memorySize = memorySize
         self.reset()
+
+        if responseManagers is None:
+            rmrla = RMRepeatLastAnswer()
+            self.__responseManagers = {
+                "repeatLastAnswer" : rmrla
+            }
+        else:
+            self.__responseManagers = responseManagers
+
         
     def reset(self):
         self.__memories = dict()
@@ -76,9 +113,11 @@ class ChatMan:
         return  newClasses if len(newClasses) > 0 else classes
 
 
-    def chooseAnswer(self, jsonData, tag):
+    def chooseAnswer(self, jsonData, selectedTags):
         if jsonData is None: return None
         if 'intents' not in jsonData : return None
+
+        tag = selectedTags[0]
 
         if tag not in jsonData['intents'] : return None
 
@@ -86,7 +125,28 @@ class ChatMan:
 
         responses = jsonData['intents'][tag]['responses']
 
-        return random.choice(responses)
+        rawAnswer = random.choice(responses)
+
+        if rawAnswer is not None and rawAnswer.startswith("${") and rawAnswer.startswith("}"):
+            p = rawAnswer.find(":", 2)
+            command = rawAnswer[ 2 : p -1 ] if p > 0 else rawAnswer[ 2 : len(rawAnswer) -1 ]
+
+            if p > 0 : params = rawAnswer[p+1:len(rawAnswer) -1]
+
+            if command in self.__responseManagers:
+                rm = self.__responseManagers[command]
+                newAnswer, register = rm.getAnswer(self.__memories, params)
+
+                asw = newAnswer
+            else:
+                register = True
+                asw = rawAnswer
+
+        if register:
+            selectedIntentToMemorize = IntentMemoryCell(selectedTags, asw)
+            self.memorizeIntent(selectedIntentToMemorize)
+
+        return asw
 
     def __get_memories(self):
         return self.__memories
@@ -134,13 +194,13 @@ class Chatbot:
         selectedClasses = chatMan.selectClasses(selectedClasses)
 
         if selectedClasses is None or len(selectedClasses) == 0:
-            asw = chatMan.chooseAnswer(self.__jsonData, noAnswerClass)
+            asw = chatMan.chooseAnswer(self.__jsonData, [noAnswerClass])
         else:
-            asw = chatMan.chooseAnswer(self.__jsonData, selectedClasses[0])
+            asw = chatMan.chooseAnswer(self.__jsonData, selectedClasses)
         
-        selectedIntentToMemorize = IntentMemoryCell(selectedClasses, asw)
+        #selectedIntentToMemorize = IntentMemoryCell(selectedClasses, asw)
 
-        chatMan.memorizeIntent(selectedIntentToMemorize)
+        #chatMan.memorizeIntent(selectedIntentToMemorize)
             
         return asw
 
