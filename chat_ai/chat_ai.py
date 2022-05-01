@@ -129,7 +129,7 @@ class ChatMan:
 
         register = True
         asw = rawAnswer
-        if rawAnswer is not None and rawAnswer.startswith("${") and rawAnswer.startswith("}"):
+        if rawAnswer is not None and rawAnswer.startswith("${") and rawAnswer.endswith("}"):
             p = rawAnswer.find(":", 2)
             command = rawAnswer[ 2 : p -1 ] if p > 0 else rawAnswer[ 2 : len(rawAnswer) -1 ]
 
