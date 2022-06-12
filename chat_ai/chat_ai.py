@@ -100,7 +100,7 @@ class DefaultWordManWithParams(DefaultWordMan):
 
         tokens = tres[0]
 
-        print(tokens)
+        #print(tokens)
 
         res = []
 
@@ -450,6 +450,7 @@ class ChatbotTrainer:
             if tag not in classes:
                 classes.append(tag)
         
+        print(vocab)
         vocab = [w for w in vocab if w not in string.punctuation]
         
         vocab = [self.__defaultWordMan.lemmatize(w) for w in vocab] + [self.__defaultWordMan.stem(w) for w in vocab]
