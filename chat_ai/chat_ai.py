@@ -1,6 +1,7 @@
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Callable, OrderedDict, Sequence
 import numpy as np
 from nltk.stem import WordNetLemmatizer
+from nltk.stem.snowball import SnowballStemmer
 import nltk
 import string
 import random
@@ -9,8 +10,103 @@ import copy
 
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import SGD
+#from tensorflow.keras.optimizers import SGD
 import tensorflow as tf
+
+import spacy
+
+
+
+class WordMan:
+
+    def __init__(self, stemmer, lematizer):
+        self.__stemmer = stemmer
+        self.__lematizer = lematizer
+
+    def __get_stemmer(self):
+        return self.__stemmer
+
+    stemmer = property(__get_stemmer)
+
+    def __get_lematizer(self):
+        return self.__lematizer
+
+    lematizer = property(__get_lematizer)
+
+
+    def stem(self, sent):
+        return self.__stemmer.stem(sent)
+
+    def lemmatize(self, sent):
+        return self.__lematizer.lemmatize(sent)
+
+
+    def tokenize(self, sent, transform = lambda s : s):
+        pass
+
+class RawSpacyWordMan(WordMan):
+
+    def __init__(self, langRef : str, stemmLang : str, lematizer):
+        super().__init__(SnowballStemmer(language=stemmLang), lematizer)
+        self.__nlp = spacy.load(langRef)
+
+    def rawTokenize(self, sent):
+        doc = self.__nlp(sent)
+        
+        return [t.text for t in doc]
+
+    def tokenize(self, sent, transform = lambda s : s):
+        if transform is None: return self.rawTokenize(sent)
+
+        doc = self.__nlp(sent)
+        
+        return [transform(t.text) for t in doc], [t.text for t in doc]
+
+class DefaultWordMan(RawSpacyWordMan):
+
+    def __init__(self, langRef : str, stemmLang : str, lematizer):
+        super().__init__(langRef, stemmLang, lematizer)
+
+    def __bringCloser(t : str, symbs : Iterable[str] = ["'"]):
+        t1 = t
+        for s in symbs:
+            t2 = t1.replace(s + ' ', s)
+            t3 = t1.replace(' ' + s, s)
+            
+            while t2 != t1 or t3 != t1:
+                t1 = t2.replace(' ' + s, s)
+                
+                t2 = t1.replace(s + ' ', s)
+                t3 = t1.replace(' ' + s, s)
+                
+        return t1
+
+    def tokenize(self, sent, transform = lambda s : s.lower()):
+        doc = DefaultWordMan.__bringCloser(sent)
+
+        tokens = self.rawTokenize(doc)
+
+        if transform is None: return tokens, tokens
+
+        return [transform(w) for w in tokens], tokens
+
+class DefaultWordManWithParams(DefaultWordMan):
+
+    def __init__(self, langRef : str, stemmLang : str, lematizer):
+        super().__init__(langRef, stemmLang, lematizer)
+
+    def tokenize(self, sent, transform = lambda s : s.lower()):
+        tokens = super().tokenize(sent, transform)
+
+        res = []
+
+        for idx, w in enumerate(tokens):
+            if w.startswith(":") and idx > 0:
+                if not tokens[idx-1].endswith("\\") : continue
+
+            res.append(w)
+                
+        return res
 
 class PatternMan:
 
@@ -18,8 +114,11 @@ class PatternMan:
         tokens = nltk.word_tokenize(pattern)
         return tokens
 
+    def extractParams(message : str) -> Mapping[str, str]:
+        return None
 
-class PatternWithParams(PatternMan):
+
+class PatternWith1Params(PatternMan):
 
     def tokenize(self, pattern: str):
         tokens = nltk.word_tokenize(pattern)
@@ -32,6 +131,48 @@ class PatternWithParams(PatternMan):
 
             res.append(w)
                 
+        return res
+
+    def __bowExtraction(self, messageTokens,  pattern):
+        patternTokens = nltk.word_tokenize(pattern.lower())
+
+        return [ w for w in messageTokens if w.lower() not in patternTokens ]
+
+
+    def extractParams(self, message : str, patterns : Iterable[object]) -> Mapping[str, str]:
+        messageTokens = nltk.word_tokenize(message)
+
+        paramsNames = []
+
+        for idx, w in enumerate(messageTokens):
+            if w.startswith(":"):
+                if idx == 0: paramsNames.append(w)
+
+                if messageTokens[idx - 1].endswith("\\") : continue
+
+                paramsNames.append(w)
+        
+        nbParams = len(paramsNames)
+        if nbParams == 0: return None
+
+        values = []
+        for pattern in patterns:
+            values = values + self.__bowExtraction(messageTokens, pattern)
+
+        countDict = OrderedDict()
+        for v in values:
+            if v in countDict:
+                countDict[v] += 1
+            else:
+                countDict[v] = 1
+
+        maxCount = 0
+        res = None
+        for v in countDict:
+            if countDict[v] > maxCount:
+                maxCount = countDict[v]
+                res = v
+
         return res
 
 class IntentMemoryCell:
@@ -113,7 +254,7 @@ class ChatMan:
         return  newClasses if len(newClasses) > 0 else classes
 
 
-    def chooseAnswer(self, jsonData, selectedTags):
+    def chooseAnswer(self, jsonData, text:str, selectedTags : Sequence[str]):
         if jsonData is None: return None
         if 'intents' not in jsonData : return None
 
@@ -123,7 +264,9 @@ class ChatMan:
 
         if 'responses' not in jsonData['intents'][tag] : return None
 
-        responses = jsonData['intents'][tag]['responses']
+        tagConfig = jsonData['intents'][tag]
+
+        responses = tagConfig['responses']
 
         rawAnswer = random.choice(responses)
 
@@ -156,34 +299,42 @@ class ChatMan:
 
 class Chatbot:
 
-    def __init__(self, jsonData, vocab, classes, patternManagers, fittedModel, defauthThreshold=0.5, lemmatizer = WordNetLemmatizer(), memorySize=5):
+    def __init__(self, jsonData, vocab, classes, wordMans, defaultWordMan, addFeatures : Callable[[str], Sequence[object]], fittedModel, defauthThreshold=0.5, memorySize=5):
         self.__jsonData = jsonData
         self.__fittedModel = fittedModel
-        self.__patternManagers = patternManagers
+        self.__wordMans = wordMans
+        self.__defaultWordMan = defaultWordMan
+        self.__addFeatures = addFeatures
         self.__vocab = vocab
         self.__classes = classes
-        self.__lemmatizer = lemmatizer
         self.__defauthThreshold = defauthThreshold
         
-    def __bow(self, text):
-        tokens = nltk.word_tokenize(text)
-        tokens = [self.__lemmatizer.lemmatize(w.lower()) for w in tokens]
-        
-        bow = [0] * len(self.__vocab)
-    
-        for w in tokens:
-            for idx, word in enumerate(self.__vocab):
-                if word == w: bow[idx] = 1
+    def __getFeatures(self, text):
+        tokens = self.__defaultWordMan.tokenize(text)
 
-        return np.array(bow)
+        features = []
+        for w in self.__vocab:
+            present = False
+
+            for x in tokens:
+                if w in x:
+                    present = True
+                    break
+
+            features.append(1 if present else 0)
+        
+
+        features.extend(self.__addFeatures(text))
+
+        return np.array(features)
 
 
     def answer(self, chatMan : ChatMan, text : str, threshold = None, noAnswerClass = "noAnswer"):
         if threshold is None: threshold = self.__defauthThreshold
 
-        bow = self.__bow(text)
+        features = self.__getFeatures(text)
 
-        result = self.__fittedModel.predict(np.array([bow]))[0]
+        result = self.__fittedModel.predict(np.array([features]))[0]
 
         y_pred = [[idx, res] for idx, res in enumerate(result) if res > threshold]
 
@@ -194,34 +345,47 @@ class Chatbot:
         selectedClasses = chatMan.selectClasses(selectedClasses)
 
         if selectedClasses is None or len(selectedClasses) == 0:
-            asw = chatMan.chooseAnswer(self.__jsonData, [noAnswerClass])
+            asw = chatMan.chooseAnswer(self.__jsonData, text, [noAnswerClass])
         else:
-            asw = chatMan.chooseAnswer(self.__jsonData, selectedClasses)
-        
-        #selectedIntentToMemorize = IntentMemoryCell(selectedClasses, asw)
-
-        #chatMan.memorizeIntent(selectedIntentToMemorize)
+            asw = chatMan.chooseAnswer(self.__jsonData, text, selectedClasses)
             
         return asw
 
+class WordTransformer:
 
+    def __init__(self, accuracy, transform : Callable[[str], str]):
+        self.__accuracy = accuracy
+        self.__transform = transform
+
+
+    def __get_accuracy(self):
+        return self.__accuracy
+
+    accuracy = property(__get_accuracy)
+
+    def do(self, w: str):
+        return self.__transform(w)
 
 
 class ChatbotTrainer:
 
-    __defaultPatternMan = PatternMan()
+    #WT_IDENTITY = WordTransformer([0, 0], lambda str : str)
 
-    def __init__(self, patternManagers : Mapping[str, PatternMan]=None):
-        self.__lemmatizer = WordNetLemmatizer()
-        if patternManagers is None:
-            self.__patternManagers = dict()
-            self.__patternManagers["_default"] = ChatbotTrainer.__defaultPatternMan
+    #__defaultPatternMan = PatternMan()
+
+    def __init__(self, defaultWordMan = DefaultWordManWithParams("fr_core_news_sm", "french", WordNetLemmatizer()), wordMans : Mapping[str, WordMan]=None, addFeatures : Callable[[str], Sequence[object]] = lambda _ : []):
+        self.__defaultWordMan = defaultWordMan
+
+        self.__addFeatures = addFeatures
+
+        #self.__ET_STEM = WordTransformer([0, 1], lambda str : self.__defaultWordMan.stem(str))
+        #self.__ET_LEM = WordTransformer([1, 0], lambda str : self.__defaultWordMan.lemmatize(str))
+
+        if wordMans is None:
+            self.__wordMans = dict()
+            self.__wordMans["_default"] = defaultWordMan
         else:
-            self.__patternManagers = patternManagers
-
-
-    def addPatternMan(self, name : str, pm : PatternMan):
-        self.__patternManagers[name] = pm
+            self.__wordMans = wordMans
 
     def initialize():
         nltk.download("punkt")
@@ -241,6 +405,7 @@ class ChatbotTrainer:
 
         return model
 
+
     def train(self, jsonData,  epochs=200, threshold=0.5):
 
         vocab = []
@@ -256,33 +421,34 @@ class ChatbotTrainer:
             
             for pattern in patterns:
                 if isinstance(pattern, str) :
-                    pm = ChatbotTrainer.__defaultPatternMan
+                    pm = self.__defaultWordMan
                     tokens = pm.tokenize(pattern)
                     vocab.extend(tokens)
-                    doc_X.append(pattern)
+                    doc_X.append((pattern, tokens))
                     doc_Y.append(tag)
 
                 else:
-                    pm = self.__patternManagers[pattern['man']]
+                    pm = self.__wordMans[pattern['man']]
                     newPattern = pattern['pattern']
 
                     if isinstance(newPattern, str):
                         tokens = pm.tokenize(newPattern)
                         vocab.extend(tokens)
-                        doc_X.append(newPattern)
+                        doc_X.append((newPattern, tokens))
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
                             vocab.extend(tokens)
-                            doc_X.append(p)
+                            doc_X.append((p, tokens))
                             doc_Y.append(tag)
                 
             if tag not in classes:
                 classes.append(tag)
         
+        vocab = [w for w in vocab if w not in string.punctuation]
         
-        vocab = [self.__lemmatizer.lemmatize(w.lower()) for w in vocab if w not in string.punctuation]
+        vocab = [self.__defaultWordMan.lemmatize(w) for w in vocab] + [self.__defaultWordMan.stem(w) for w in vocab]
 
         vocab = sorted(set(vocab))
         classes = sorted(set(classes))
@@ -291,17 +457,23 @@ class ChatbotTrainer:
         outEmpty = [0] * len(classes)
 
         for idx, doc in enumerate(doc_X):
-            bow = []
-            
-            text = self.__lemmatizer.lemmatize(doc.lower())
+            features = []
 
             for w in vocab:
-                bow.append(1) if w in text else bow.append(0)
+                present = False
+                for x in doc[1]:
+                    if w in x:
+                        present = True
+                        break
+
+                features.append(1 if present else 0)
+
+            features.extend(self.__addFeatures(doc[0]))
 
             outputRow = list(outEmpty)
             outputRow[classes.index(doc_Y[idx])] = 1
 
-            training.append([bow, outputRow])
+            training.append([features, outputRow])
         
 
         random.shuffle(training)
@@ -318,10 +490,7 @@ class ChatbotTrainer:
 
         model.fit(x=train_X, y=train_Y, epochs=epochs)
 
-        #self.vocab = vocab
-        #self.classes = classes
-        #self.model = model
 
-        return Chatbot(jsonData, vocab, classes, self.__patternManagers,  model, threshold)
+        return Chatbot(jsonData, vocab, classes, self.__wordMans, self.__defaultWordMan, self.__addFeatures, model, threshold)
 
 
