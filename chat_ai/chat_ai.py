@@ -312,6 +312,11 @@ class Chatbot:
         self.__vocab = vocab
         self.__classes = classes
         self.__defauthThreshold = defauthThreshold
+
+    def __get_vocab(self):
+        return self.__vocab
+
+    vocab = property(__get_vocab)
         
     def __getFeatures(self, text):
         tokens = self.__defaultWordMan.tokenize(text)
@@ -320,7 +325,7 @@ class Chatbot:
         for w in self.__vocab:
             present = False
 
-            for x in tokens:
+            for x in tokens[0]:
                 if w in x:
                     present = True
                     break
