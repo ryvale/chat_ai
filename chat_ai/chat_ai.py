@@ -335,6 +335,8 @@ class Chatbot:
 
         features.extend(self.__addFeatures(text))
 
+        print(features)
+
         return np.array(features)
 
 
