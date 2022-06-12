@@ -98,6 +98,8 @@ class DefaultWordManWithParams(DefaultWordMan):
     def tokenize(self, sent, transform = lambda s : s.lower()):
         tokens = super().tokenize(sent, transform)
 
+        print(tokens)
+
         res = []
 
         for idx, w in enumerate(tokens):
