@@ -64,7 +64,7 @@ class RawSpacyWordMan(WordMan):
 
 class DefaultWordMan(RawSpacyWordMan):
 
-    def __init__(self, langRef : str, stemmLang : str, lematizer):
+    def __init__(self, langRef : str, stemmLang : str, lematizer = WordNetLemmatizer()):
         super().__init__(langRef, stemmLang, lematizer)
 
     def __bringCloser(t : str, symbs : Iterable[str] = ["'"]):
@@ -92,7 +92,7 @@ class DefaultWordMan(RawSpacyWordMan):
 
 class DefaultWordManWithParams(DefaultWordMan):
 
-    def __init__(self, langRef : str, stemmLang : str, lematizer):
+    def __init__(self, langRef : str, stemmLang : str, lematizer = WordNetLemmatizer()):
         super().__init__(langRef, stemmLang, lematizer)
 
     def tokenize(self, sent, transform = lambda s : s.lower()):
