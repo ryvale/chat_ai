@@ -1,4 +1,4 @@
-from typing import Iterable, Mapping, Callable, OrderedDict, Sequence
+from typing import Iterable, Mapping, Callable, Sequence
 import numpy as np
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.snowball import SnowballStemmer
@@ -159,7 +159,7 @@ class PatternWith1Params(PatternMan):
         for pattern in patterns:
             values = values + self.__bowExtraction(messageTokens, pattern)
 
-        countDict = OrderedDict()
+        countDict = dict()
         for v in values:
             if v in countDict:
                 countDict[v] += 1
