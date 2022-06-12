@@ -427,7 +427,7 @@ class ChatbotTrainer:
                 if isinstance(pattern, str) :
                     pm = self.__defaultWordMan
                     tokens = pm.tokenize(pattern)
-                    vocab.extend(tokens)
+                    vocab.extend(tokens[1])
                     doc_X.append((pattern, tokens))
                     doc_Y.append(tag)
 
@@ -437,20 +437,20 @@ class ChatbotTrainer:
 
                     if isinstance(newPattern, str):
                         tokens = pm.tokenize(newPattern)
-                        vocab.extend(tokens)
+                        vocab.extend(tokens[1])
                         doc_X.append((newPattern, tokens))
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
                             vocab.extend(tokens)
-                            doc_X.append((p, tokens))
+                            doc_X.append((p, tokens[1]))
                             doc_Y.append(tag)
                 
             if tag not in classes:
                 classes.append(tag)
         
-        print(vocab)
+        #print(vocab)
         vocab = [w for w in vocab if w not in string.punctuation]
         
         vocab = [self.__defaultWordMan.lemmatize(w) for w in vocab] + [self.__defaultWordMan.stem(w) for w in vocab]
