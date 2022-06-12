@@ -321,18 +321,13 @@ class Chatbot:
     def __getFeatures(self, text):
         tokens = self.__defaultWordMan.tokenize(text)
 
+        ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
+        ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
+
         features = []
         for w in self.__vocab:
-            present = False
-
-            for x in tokens[0]:
-                if w in x:
-                    present = True
-                    break
-
-            features.append(1 if present else 0)
+            features.append(1 if w in ttokens else 0)
         
-
         features.extend(self.__addFeatures(text))
 
         print(features)
@@ -434,8 +429,12 @@ class ChatbotTrainer:
                 if isinstance(pattern, str) :
                     pm = self.__defaultWordMan
                     tokens = pm.tokenize(pattern)
+
+                    ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
+                    ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
+
                     vocab.extend(tokens[0])
-                    doc_X.append((pattern, tokens))
+                    doc_X.append((pattern, ttokens))
                     doc_Y.append(tag)
 
                 else:
@@ -444,14 +443,22 @@ class ChatbotTrainer:
 
                     if isinstance(newPattern, str):
                         tokens = pm.tokenize(newPattern)
+
+                        ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
+                        ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
+
                         vocab.extend(tokens[0])
-                        doc_X.append((newPattern, tokens))
+                        doc_X.append((newPattern, ttokens))
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
+
+                            ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
+                            ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
+
                             vocab.extend(tokens[0])
-                            doc_X.append((p, tokens))
+                            doc_X.append((p, ttokens))
                             doc_Y.append(tag)
                 
             if tag not in classes:
@@ -472,13 +479,7 @@ class ChatbotTrainer:
             features = []
 
             for w in vocab:
-                present = False
-                for x in doc[1]:
-                    if w in x:
-                        present = True
-                        break
-
-                features.append(1 if present else 0)
+                features.append(1 if w in doc[1] else 0)
 
             features.extend(self.__addFeatures(doc[0]))
 
