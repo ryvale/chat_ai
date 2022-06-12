@@ -96,7 +96,9 @@ class DefaultWordManWithParams(DefaultWordMan):
         super().__init__(langRef, stemmLang, lematizer)
 
     def tokenize(self, sent, transform = lambda s : s.lower()):
-        tokens = super().tokenize(sent, transform)
+        tres = super().tokenize(sent, transform)
+
+        tokens = tres[0]
 
         print(tokens)
 
@@ -108,7 +110,7 @@ class DefaultWordManWithParams(DefaultWordMan):
 
             res.append(w)
                 
-        return res
+        return res, tres[1]
 
 class PatternMan:
 
