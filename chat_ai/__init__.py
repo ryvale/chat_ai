@@ -1,1 +1,1 @@
-from .chat_ai import PatternMan, PatternWith1Params, ChatbotTrainer, ChatMan
+from .chat_ai import PatternMan, DefaultWordManWithParams, ChatbotTrainer, ChatMan
