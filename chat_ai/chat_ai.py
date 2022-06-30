@@ -448,6 +448,8 @@ class Chatbot:
 
         atokens, penalties = self.__buildInputs(tokens[0])
 
+        print(atokens)
+
         result = []
         for tokens in atokens:
             features = self.__getFeatures(tokens, text)
