@@ -448,15 +448,18 @@ class Chatbot:
 
         atokens, penalties = self.__buildInputs(tokens[0])
 
-        print(atokens)
-
         result = []
         for tokens in atokens:
             features = self.__getFeatures(tokens, text)
 
+            print("features", features)
+
             r = self.__fittedModel.predict(np.array([features]))[0]
 
+            print("pred", r)
+
             result.extend(r)
+
 
         y_pred = [[idx, res * penalties[idx]] for idx, res in enumerate(result) if res > threshold]
 
