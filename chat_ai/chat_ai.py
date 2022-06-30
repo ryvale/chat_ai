@@ -438,7 +438,6 @@ class Chatbot:
 
         penalties = [self.__inputScore(tkns) for tkns in res]
 
-        print(res)
 
         return res, penalties
 
@@ -447,7 +446,7 @@ class Chatbot:
 
         tokens = self.__defaultWordMan.tokenize(text)
 
-        atokens, penalties = self.__buildInputs(tokens)
+        atokens, penalties = self.__buildInputs(tokens[0])
 
         result = []
         for tokens in atokens:
