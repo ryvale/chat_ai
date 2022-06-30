@@ -544,7 +544,7 @@ class ChatbotTrainer:
                     tokens = pm.tokenize(pattern)
 
                     vocab.extend(tokens[0])
-                    doc_X.append((pattern, tokens))
+                    doc_X.append((pattern, tokens[0]))
                     doc_Y.append(tag)
 
                 else:
@@ -555,14 +555,14 @@ class ChatbotTrainer:
                         tokens = pm.tokenize(newPattern)
 
                         vocab.extend(tokens[0])
-                        doc_X.append((newPattern, tokens))
+                        doc_X.append((newPattern, tokens[0]))
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
 
                             vocab.extend(tokens[0])
-                            doc_X.append((p, tokens))
+                            doc_X.append((p, tokens[0]))
                             doc_Y.append(tag)
                 
             if tag not in classes:
@@ -581,11 +581,12 @@ class ChatbotTrainer:
 
         for idx, doc in enumerate(doc_X):
             features = []
+            ftokens = doc[1]
 
             for w in vocab:
-                features.append(1 if w in doc[1] else 0)
+                features.append(1 if w in ftokens else 0)
 
-            features.extend(self.__addFeatures(doc[0], doc[1]))
+            features.extend(self.__addFeatures(doc[0], ftokens))
 
             outputRow = list(outEmpty)
             outputRow[classes.index(doc_Y[idx])] = 1
