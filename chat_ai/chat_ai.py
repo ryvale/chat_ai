@@ -415,6 +415,9 @@ class Chatbot:
                     
                 res.extend(antokens)
 
+        return res
+        
+
                 
     def __inputScore(self, tokens, penalty = 0.9999):
     
