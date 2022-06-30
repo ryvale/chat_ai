@@ -1,3 +1,4 @@
+#from tokenize import Number
 from typing import Iterable, Mapping, Callable, Sequence
 import numpy as np
 from nltk.stem import WordNetLemmatizer
@@ -99,8 +100,6 @@ class DefaultWordManWithParams(DefaultWordMan):
         tres = super().tokenize(sent, transform)
 
         tokens = tres[0]
-
-        #print(tokens)
 
         res = []
 
@@ -303,7 +302,7 @@ class ChatMan:
 
 class Chatbot:
 
-    def __init__(self, jsonData, vocab, classes, wordMans, defaultWordMan, addFeatures : Callable[[str], Sequence[object]], fittedModel, defauthThreshold=0.5, memorySize=5):
+    def __init__(self, jsonData, vocab, classes, wordMans, defaultWordMan, addFeatures : Callable[[str, Sequence[str]], Sequence[object]], fittedModel, defauthThreshold=0.5, memorySize=5):
         self.__jsonData = jsonData
         self.__fittedModel = fittedModel
         self.__wordMans = wordMans
@@ -318,31 +317,142 @@ class Chatbot:
 
     vocab = property(__get_vocab)
         
-    def __getFeatures(self, text):
-        tokens = self.__defaultWordMan.tokenize(text)
+    def __getFeatures(self, tokens, text):
+        #tokens = self.__defaultWordMan.tokenize(text)
 
-        ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
-        ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
+        #ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
+        #ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
 
         features = []
         for w in self.__vocab:
-            features.append(1 if w in ttokens else 0)
+            features.append(1 if w in tokens else 0)
         
-        features.extend(self.__addFeatures(text))
+        features.extend(self.__addFeatures(text, tokens))
 
-        print(features)
+        #print(features)
 
         return np.array(features)
 
+    def __tokensEquiv(self, tokens, maxInputs = 1000):
+        res = []
+    
+        if "config" not in self.__jsonData: return res
+        
+        if "equivalent" not in self.__jsonData["config"]: return res
+        
+        cfgEquivs = self.__jsonData["config"]["equivalent"]
+
+        nbTokens = len(tokens)
+        
+        tequivs = [None] * nbTokens
+
+        iequivs = []
+
+        for i, t in enumerate(tokens):
+            if t in self.__vocab : continue
+
+            for rightWord in cfgEquivs:
+                if t in cfgEquivs[rightWord]:
+                    if tequivs[i] is None:
+                        tequivs[i] = [rightWord]
+                        iequivs.append(i)
+                    else:
+                        tequivs[i].append(rightWord)
+        
+        w = 1
+        for rw in tequivs:
+            if rw is None or len(rw) < 2: continue
+            
+            w *= len(rw)
+
+        nbEq = len(iequivs)
+        if nbEq > 0:
+            nbMax = (2 ** nbEq) if maxInputs is None else min(2 ** nbEq, maxInputs)
+
+            permutations =  np.random.permutation(np.arange(1, nbMax))
+            
+            for p in permutations:
+
+                antokens = [tokens.copy()]
+
+                cbin = ("{0:0"+ str(nbEq) + "b}").format(p)
+                
+                for i, b in enumerate(cbin):
+                    if b == '1':
+                        eidx = iequivs[i]
+                    
+                        
+                        neq = len(tequivs[eidx])
+        
+
+                        if neq > 1:
+
+                            nantokens = []
+                                
+                            for ntokens in antokens:
+                                if ntokens[eidx] in tequivs[eidx] : continue
+                            
+                                #print("ntokens", ntokens)
+                                dtokens = []
+                                
+                                
+                                for idt, eqw in enumerate(tequivs[eidx]):
+                                    nd = ntokens.copy()
+                                    nd[eidx] = eqw
+                                    dtokens.append(nd)
+
+                                nantokens.extend(dtokens)
+                            
+                            antokens = nantokens
+
+                        else:
+
+                            for ntokens in antokens:
+                                if ntokens[eidx] in tequivs[eidx] : continue
+
+                                for idt, eqw in enumerate(tequivs[eidx]):
+                                    ntokens[eidx] = eqw
+                    
+                res.extend(antokens)
+
+                
+    def __inputScore(self, tokens, penalty = 0.9999):
+    
+        res = 1
+        for t in tokens:
+            if t in self.__vocab : continue
+                
+            res *= penalty
+            
+        return res
+
+    def __buildInputs(self, tokens, maxInputs = 1000):
+        res = [tokens]
+
+        newInputs = self.__tokensEquiv(tokens, maxInputs)
+
+        res.extend(newInputs)
+
+        penalties = [self.__inputScore(tkns) for tkns in res]
+
+        return res, penalties
 
     def answer(self, chatMan : ChatMan, text : str, threshold = None, noAnswerClass = "noAnswer"):
         if threshold is None: threshold = self.__defauthThreshold
 
-        features = self.__getFeatures(text)
+        tokens = self.__defaultWordMan.tokenize(text)
 
-        result = self.__fittedModel.predict(np.array([features]))[0]
+        atokens, penalties = self.__buildInputs(tokens)
 
-        y_pred = [[idx, res] for idx, res in enumerate(result) if res > threshold]
+        result = []
+        for tokens in atokens:
+            features = self.__getFeatures(tokens, text)
+
+            r = self.__fittedModel.predict(np.array([features]))[0]
+
+            result.extend(r)
+
+        y_pred = [[idx, res * penalties[idx]] for idx, res in enumerate(result) if res > threshold]
 
         y_pred.sort(key=lambda x:x[1], reverse=True)
 
@@ -379,7 +489,7 @@ class ChatbotTrainer:
 
     #__defaultPatternMan = PatternMan()
 
-    def __init__(self, defaultWordMan = DefaultWordManWithParams("fr_core_news_sm", "french", WordNetLemmatizer()), wordMans : Mapping[str, WordMan]=None, addFeatures : Callable[[str], Sequence[object]] = lambda _ : []):
+    def __init__(self, defaultWordMan = DefaultWordManWithParams("fr_core_news_sm", "french", WordNetLemmatizer()), wordMans : Mapping[str, WordMan]=None, addFeatures : Callable[[str, Sequence[str]], Sequence[object]] = lambda _, __ : []):
         self.__defaultWordMan = defaultWordMan
 
         self.__addFeatures = addFeatures
@@ -401,7 +511,7 @@ class ChatbotTrainer:
     def __estimator(self, inputShape, outputShape):
         model = Sequential()
         model.add(Dense(128, input_shape=inputShape, activation="relu"))
-        model.add(Dropout(0.5))
+        model.add(Dropout(0.4))
         model.add(Dense(64, activation="relu"))
         model.add(Dropout(0.3))
         model.add(Dense(outputShape, activation="softmax"))
@@ -430,11 +540,8 @@ class ChatbotTrainer:
                     pm = self.__defaultWordMan
                     tokens = pm.tokenize(pattern)
 
-                    ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
-                    ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
-
                     vocab.extend(tokens[0])
-                    doc_X.append((pattern, ttokens))
+                    doc_X.append((pattern, tokens))
                     doc_Y.append(tag)
 
                 else:
@@ -444,21 +551,15 @@ class ChatbotTrainer:
                     if isinstance(newPattern, str):
                         tokens = pm.tokenize(newPattern)
 
-                        ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
-                        ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
-
                         vocab.extend(tokens[0])
-                        doc_X.append((newPattern, ttokens))
+                        doc_X.append((newPattern, tokens))
                         doc_Y.append(tag)
                     else:
                         for p in newPattern:
                             tokens = pm.tokenize(p)
 
-                            ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
-                            ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
-
                             vocab.extend(tokens[0])
-                            doc_X.append((p, ttokens))
+                            doc_X.append((p, tokens))
                             doc_Y.append(tag)
                 
             if tag not in classes:
@@ -467,7 +568,7 @@ class ChatbotTrainer:
         #print(vocab)
         vocab = [w for w in vocab if w not in string.punctuation]
         
-        vocab = [self.__defaultWordMan.lemmatize(w) for w in vocab] + [self.__defaultWordMan.stem(w) for w in vocab]
+        #vocab = [self.__defaultWordMan.lemmatize(w) for w in vocab] + [self.__defaultWordMan.stem(w) for w in vocab]
 
         vocab = sorted(set(vocab))
         classes = sorted(set(classes))
@@ -481,7 +582,7 @@ class ChatbotTrainer:
             for w in vocab:
                 features.append(1 if w in doc[1] else 0)
 
-            features.extend(self.__addFeatures(doc[0]))
+            features.extend(self.__addFeatures(doc[0], doc[1]))
 
             outputRow = list(outEmpty)
             outputRow[classes.index(doc_Y[idx])] = 1
