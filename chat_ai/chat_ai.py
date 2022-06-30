@@ -302,7 +302,7 @@ class ChatMan:
 
 class Chatbot:
 
-    def __init__(self, jsonData, vocab, classes, wordMans, defaultWordMan, addFeatures : Callable[[str, Sequence[str]], Sequence[object]], fittedModel, defauthThreshold=0.5, memorySize=5):
+    def __init__(self, jsonData, vocab, classes, wordMans, defaultWordMan, addFeatures : Callable[[str, Sequence[str]], Sequence[object]], fittedModel, defauthThreshold=0.5, memorySize=5, transformToken : Callable[[str] , str] = None):
         self.__jsonData = jsonData
         self.__fittedModel = fittedModel
         self.__wordMans = wordMans
@@ -312,16 +312,38 @@ class Chatbot:
         self.__classes = classes
         self.__defauthThreshold = defauthThreshold
 
+        self.__transformToken = transformToken
+
+
+
     def __get_vocab(self):
         return self.__vocab
 
     vocab = property(__get_vocab)
+
+    def __get_transformToken(self):
+        return self.__transformToken
+
+
+    def __set_transformToken(self, tt : Callable[[str] , str]):
+        self.__transformToken = tt
+
+    transformToken = property(__get_transformToken, __set_transformToken)
         
     def __getFeatures(self, tokens, text):
 
         features = []
-        for w in self.__vocab:
-            features.append(1 if w in tokens else 0)
+
+        if self.__transformToken is None:
+            for w in self.__vocab:
+                features.append(1 if w in tokens else 0)
+        else:
+            ttokens = [self.__transformToken(t) for t in tokens] 
+            for w in self.__vocab:
+                if w in tokens:
+                    features.append(1)
+                else:
+                    features.append(1 if self.__transformToken(w) in ttokens else 0)
         
         features.extend(self.__addFeatures(text, tokens))
 
