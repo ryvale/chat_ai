@@ -434,11 +434,11 @@ class Chatbot:
 
         newInputs = self.__tokensEquiv(tokens, maxInputs)
 
-        print(newInputs)
-
         res.extend(newInputs)
 
         penalties = [self.__inputScore(tkns) for tkns in res]
+
+        print(res)
 
         return res, penalties
 
