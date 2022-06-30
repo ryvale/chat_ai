@@ -318,18 +318,12 @@ class Chatbot:
     vocab = property(__get_vocab)
         
     def __getFeatures(self, tokens, text):
-        #tokens = self.__defaultWordMan.tokenize(text)
-
-        #ttokens  = [self.__defaultWordMan.lemmatize(w) for w in tokens[0]]
-        #ttokens += [self.__defaultWordMan.stem(w) for w in tokens[0] if w not in ttokens]
 
         features = []
         for w in self.__vocab:
             features.append(1 if w in tokens else 0)
         
         features.extend(self.__addFeatures(text, tokens))
-
-        #print(features)
 
         return np.array(features)
 
@@ -417,8 +411,7 @@ class Chatbot:
 
         return res
         
-
-                
+      
     def __inputScore(self, tokens, penalty = 0.9999):
     
         res = 1
@@ -438,7 +431,6 @@ class Chatbot:
 
         penalties = [self.__inputScore(tkns) for tkns in res]
 
-
         return res, penalties
 
     def answer(self, chatMan : ChatMan, text : str, threshold = None, noAnswerClass = "noAnswer"):
@@ -449,19 +441,21 @@ class Chatbot:
         atokens, penalties = self.__buildInputs(tokens[0])
 
         result = []
-        for tokens in atokens:
+        for idx, tokens in enumerate(atokens):
             features = self.__getFeatures(tokens, text)
-
-            print("features", features)
 
             r = self.__fittedModel.predict(np.array([features]))[0]
 
-            print("pred", r)
+            ajustedR = [ v * penalties[idx] for v in r]
 
-            result.extend(r)
+            result.append(ajustedR)
 
-
-        y_pred = [[idx, res * penalties[idx]] for idx, res in enumerate(result) if res > threshold]
+        syntResult = [0.0] * len(self.__classes)
+        for i in range(len(self.__classes)):
+            for ar in result:
+                if syntResult[i] < ar[i]: syntResult[i] = ar[i]
+ 
+        y_pred = [[idx, res] for idx, res in enumerate(syntResult) if res > threshold]
 
         y_pred.sort(key=lambda x:x[1], reverse=True)
 
